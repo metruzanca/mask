@@ -1,0 +1,47 @@
+# GoReleaser configuration. A `vMAJOR.MINOR.PATCH` tag triggers the release
+# workflow (see .github/workflows/release.yml), which builds and uploads
+# binaries and, via the tag itself, makes `go install
+# github.com/metruzanca/mask@latest` (or @vX.Y.Z) work.
+version: 2
+
+project_name: mask
+
+builds:
+  - id: mask
+    main: .
+    binary: mask
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X github.com/metruzanca/mask/internal/cmd.Version={{.Version}}
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+      - '^Merge pull request'
+      - '^Merge branch'
+
+checksum:
+  name_template: checksums.txt
