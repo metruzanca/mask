@@ -92,6 +92,31 @@ func CreateForm() (CreateResult, error) {
 	return res, nil
 }
 
+// SettingsForm asks whether per-repo automatic masking should be on and
+// returns "automatic" or "manual".
+func SettingsForm(automatic bool) (string, error) {
+	choice := "manual"
+	if automatic {
+		choice = "automatic"
+	}
+	err := huh.NewForm(
+		huh.NewGroup(
+			huh.NewSelect[string]().
+				Title("Mask control").
+				Description("Automatic applies each repo's remembered mask as you cd; manual leaves it to you").
+				Options(
+					huh.NewOption("Automatic (per-repo)", "automatic"),
+					huh.NewOption("Manual", "manual"),
+				).
+				Value(&choice),
+		),
+	).Run()
+	if err != nil {
+		return "", err
+	}
+	return choice, nil
+}
+
 // SwitchForm shows a dropdown of mask names and returns the chosen one.
 func SwitchForm(names []string) (string, error) {
 	if len(names) == 0 {

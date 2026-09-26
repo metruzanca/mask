@@ -48,6 +48,7 @@ func Parse(s string) (Shell, bool) {
 // cleared before a new mask is applied so no stale value leaks between masks.
 var managedVars = []string{
 	"MASK_NAME",
+	"MASK_REPO",
 	"MASK_ENV_MASK",
 	"GIT_AUTHOR_NAME",
 	"GIT_AUTHOR_EMAIL",
@@ -73,6 +74,14 @@ type Assignment struct {
 type Payload struct {
 	// Name is the mask name written to MASK_NAME, or "" to turn mask off.
 	Name string
+	// Repo is the canonical repository id written to MASK_REPO, or "" to
+	// unset it. It is always emitted, even when the mask does not change, so
+	// the directory hook can detect the next transition.
+	Repo string
+	// RepoOnly updates MASK_REPO and nothing else, without clearing the worn
+	// mask. The directory hook uses it when only the repo changed while the
+	// mask stayed the same.
+	RepoOnly bool
 	// Vars are the values to export for the mask (git identity, SSH command,
 	// and the user's own env vars).
 	Vars []Assignment
@@ -102,8 +111,10 @@ func Init(shell Shell) (string, error) {
 	switch shell {
 	case Fish:
 		return fishInit, nil
-	case Bash, Zsh:
+	case Bash:
 		return shInit(string(shell)), nil
+	case Zsh:
+		return zshInit(string(shell)), nil
 	}
 	return "", fmt.Errorf("unsupported shell %q", shell)
 }
@@ -166,6 +177,10 @@ function mask
             command mask $argv
     end
 end
+function __mask_hook --on-variable PWD
+    command mask --shell=fish _hook | source
+end
+__mask_hook
 `
 
 func shInit(shell string) string {
@@ -176,11 +191,44 @@ mask() {
         *) command mask "$@" ;;
     esac
 }
+__mask_hook() {
+    [ "${MASK_LAST_PWD:-}" = "$PWD" ] && return
+    MASK_LAST_PWD="$PWD"
+    eval "$(command mask --shell=` + shell + ` _hook)"
+}
+__mask_hook
+`
+}
+
+func zshInit(shell string) string {
+	return `# mask init ` + shell + ` (generated, do not edit)
+mask() {
+    case "$1" in
+        switch|off) eval "$(command mask --shell=` + shell + ` "$@")" ;;
+        *) command mask "$@" ;;
+    esac
+}
+__mask_hook() {
+    MASK_LAST_PWD="$PWD"
+    eval "$(command mask --shell=` + shell + ` _hook)"
+}
+autoload -Uz add-zsh-hook
+add-zsh-hook chpwd __mask_hook
+__mask_hook
 `
 }
 
 func fishPayload(p Payload) string {
 	var b strings.Builder
+	if p.RepoOnly {
+		b.WriteString("# mask: repo marker only\n")
+		if p.Repo != "" {
+			fmt.Fprintf(&b, "set -gx MASK_REPO %s\n", fishQuote(p.Repo))
+		} else {
+			b.WriteString("set -e MASK_REPO\n")
+		}
+		return b.String()
+	}
 	b.WriteString("# mask: clear previous environment\n")
 	b.WriteString("if set -q MASK_ENV_MASK\n")
 	b.WriteString("    for _mask_v in $MASK_ENV_MASK\n")
@@ -194,6 +242,9 @@ func fishPayload(p Payload) string {
 	b.WriteString("# mask: apply environment\n")
 	if p.Name != "" {
 		fmt.Fprintf(&b, "set -gx MASK_NAME %s\n", fishQuote(p.Name))
+	}
+	if p.Repo != "" {
+		fmt.Fprintf(&b, "set -gx MASK_REPO %s\n", fishQuote(p.Repo))
 	}
 	for _, a := range p.Vars {
 		fmt.Fprintf(&b, "set -gx %s %s\n", a.Name, fishQuote(a.Value))
@@ -212,6 +263,15 @@ func fishPayload(p Payload) string {
 
 func shPayload(p Payload) string {
 	var b strings.Builder
+	if p.RepoOnly {
+		b.WriteString("# mask: repo marker only\n")
+		if p.Repo != "" {
+			fmt.Fprintf(&b, "export MASK_REPO=%s\n", shQuote(p.Repo))
+		} else {
+			b.WriteString("unset MASK_REPO\n")
+		}
+		return b.String()
+	}
 	b.WriteString("# mask: clear previous environment\n")
 	b.WriteString(`if [ -n "${MASK_ENV_MASK:-}" ]; then` + "\n")
 	b.WriteString("    for _mask_v in $MASK_ENV_MASK; do unset \"$_mask_v\"; done\n")
@@ -223,6 +283,9 @@ func shPayload(p Payload) string {
 	b.WriteString("# mask: apply environment\n")
 	if p.Name != "" {
 		fmt.Fprintf(&b, "export MASK_NAME=%s\n", shQuote(p.Name))
+	}
+	if p.Repo != "" {
+		fmt.Fprintf(&b, "export MASK_REPO=%s\n", shQuote(p.Repo))
 	}
 	for _, a := range p.Vars {
 		fmt.Fprintf(&b, "export %s=%s\n", a.Name, shQuote(a.Value))

@@ -22,24 +22,54 @@ type Mask struct {
 	Env      map[string]string `toml:"env,omitempty"`
 }
 
+// Settings is the [settings] table. Automatic is a pointer so an absent field
+// can default to on while an explicit `automatic = false` is honored.
+type Settings struct {
+	Automatic *bool `toml:"automatic,omitempty"`
+}
+
 // Config is the whole config file.
 type Config struct {
-	Masks map[string]Mask `toml:"mask"`
+	Masks    map[string]Mask `toml:"mask"`
+	Settings Settings        `toml:"settings,omitempty"`
+}
+
+// Automatic reports whether per-repo automatic masking is enabled. It defaults
+// to true when the setting is absent.
+func (c *Config) Automatic() bool {
+	if c.Settings.Automatic == nil {
+		return true
+	}
+	return *c.Settings.Automatic
+}
+
+// SetAutomatic writes the automatic setting.
+func (c *Config) SetAutomatic(v bool) {
+	c.Settings.Automatic = &v
 }
 
 // ErrNotExist is returned by Load when there is no config file yet.
 var ErrNotExist = errors.New("no config file")
 
-// Path returns the config file path, honoring XDG_CONFIG_HOME.
-func Path() (string, error) {
+// Dir returns the mask config directory, honoring XDG_CONFIG_HOME.
+func Dir() (string, error) {
 	if dir := os.Getenv("XDG_CONFIG_HOME"); dir != "" {
-		return filepath.Join(dir, "mask", "config.toml"), nil
+		return filepath.Join(dir, "mask"), nil
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".config", "mask", "config.toml"), nil
+	return filepath.Join(home, ".config", "mask"), nil
+}
+
+// Path returns the config file path, honoring XDG_CONFIG_HOME.
+func Path() (string, error) {
+	dir, err := Dir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "config.toml"), nil
 }
 
 // Load reads the config file. A missing file yields an empty config and an

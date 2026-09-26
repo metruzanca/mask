@@ -92,6 +92,38 @@ func TestExpandPath(t *testing.T) {
 	}
 }
 
+func TestAutomaticDefaultsOn(t *testing.T) {
+	cfg := &Config{}
+	if !cfg.Automatic() {
+		t.Error("automatic should default to true when unset")
+	}
+	cfg.SetAutomatic(false)
+	if cfg.Automatic() {
+		t.Error("automatic should honor explicit false")
+	}
+	cfg.SetAutomatic(true)
+	if !cfg.Automatic() {
+		t.Error("automatic should honor explicit true")
+	}
+}
+
+func TestSettingsRoundTrip(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	cfg := &Config{}
+	cfg.SetAutomatic(false)
+	cfg.Set("work", Mask{GitName: "W"})
+	if err := cfg.SaveFile(path); err != nil {
+		t.Fatal(err)
+	}
+	got, err := LoadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Automatic() {
+		t.Error("automatic=false did not persist")
+	}
+}
+
 func TestPathHonorsXDG(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", "/tmp/xdg-test")
 	got, err := Path()
