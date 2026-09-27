@@ -22,6 +22,18 @@ const (
 	ActionSwitch
 )
 
+// CacheKind is what mask remembers about a repository.
+type CacheKind int
+
+const (
+	// CacheUnknown means the repo has no entry.
+	CacheUnknown CacheKind = iota
+	// CacheMask means the repo remembers a named mask.
+	CacheMask
+	// CacheNone means the repo was explicitly left without a mask.
+	CacheNone
+)
+
 // Input is everything Decide needs to know.
 type Input struct {
 	// Automatic is the [settings] automatic toggle.
@@ -34,9 +46,10 @@ type Input struct {
 	InRepo bool
 	// Repo is the resolved repository when InRepo is true.
 	Repo repo.Info
-	// CachedMask and HasCache describe the remembered mask for Repo.
+	// Cache describes what is remembered for Repo.
+	Cache CacheKind
+	// CachedMask is the remembered mask when Cache is CacheMask.
 	CachedMask string
-	HasCache   bool
 	// MaskExists reports whether a mask name is still configured.
 	MaskExists func(string) bool
 }
@@ -83,17 +96,26 @@ func Decide(in Input) Decision {
 	}
 
 	root := in.Repo.Root
-	switch {
-	case in.HasCache && in.MaskExists != nil && in.MaskExists(in.CachedMask):
-		if in.CachedMask == in.CurrentMask {
+	switch in.Cache {
+	case CacheNone:
+		if in.CurrentMask == "" {
 			return d
 		}
-		d.Action = ActionSwitch
-		d.Mask = in.CachedMask
-		d.Notice = fmt.Sprintf("entered %s -> wearing %q", root, in.CachedMask)
+		d.Action = ActionOff
+		d.Notice = fmt.Sprintf("entered %s -> no mask here, mask off", root)
 		d.Log = d.Notice
-	case in.HasCache:
-		// Remembered mask was deleted from the config.
+	case CacheMask:
+		if in.MaskExists != nil && in.MaskExists(in.CachedMask) {
+			if in.CachedMask == in.CurrentMask {
+				return d
+			}
+			d.Action = ActionSwitch
+			d.Mask = in.CachedMask
+			d.Notice = fmt.Sprintf("entered %s -> wearing %q", root, in.CachedMask)
+			d.Log = d.Notice
+			return d
+		}
+		// Remembered mask was deleted from the config; degrade to unknown.
 		d.Forget = true
 		if in.CurrentMask == "" {
 			return d

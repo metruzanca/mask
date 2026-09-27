@@ -23,9 +23,12 @@ const (
 	maxLogLines = 1000
 )
 
-// Repo is the remembered mask for one repository.
+// Repo is the remembered state for one repository. Exactly one of Mask (a
+// named mask) or None (an explicit "no mask here") is set. A repo with no
+// entry at all is "unknown".
 type Repo struct {
-	Mask      string `toml:"mask"`
+	Mask      string `toml:"mask,omitempty"`
+	None      bool   `toml:"none,omitempty"`
 	Root      string `toml:"root"`
 	UpdatedAt string `toml:"updated_at"`
 }
@@ -111,19 +114,31 @@ func (s *State) SaveFile(path string) error {
 
 // Record remembers that id (a canonical repo id) wears name.
 func (s *State) Record(id, root, name string) {
+	s.set(id, Repo{Mask: name, Root: root})
+}
+
+// RecordNone remembers that id was explicitly left without a mask.
+func (s *State) RecordNone(id, root string) {
+	s.set(id, Repo{None: true, Root: root})
+}
+
+func (s *State) set(id string, r Repo) {
 	if s.Repo == nil {
 		s.Repo = map[string]Repo{}
 	}
-	s.Repo[id] = Repo{Mask: name, Root: root, UpdatedAt: time.Now().UTC().Format(time.RFC3339)}
+	r.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+	s.Repo[id] = r
 }
 
-// Lookup returns the remembered mask for id.
-func (s *State) Lookup(id string) (string, bool) {
+// Lookup returns the remembered state for id. The bool reports whether an
+// entry exists at all; a missing entry is "unknown". Repo.None distinguishes
+// an explicit "no mask" from a named Mask.
+func (s *State) Lookup(id string) (Repo, bool) {
 	r, ok := s.Repo[id]
-	if !ok || r.Mask == "" {
-		return "", false
+	if !ok {
+		return Repo{}, false
 	}
-	return r.Mask, true
+	return r, true
 }
 
 // Forget drops the entry for id. It returns whether anything was removed.

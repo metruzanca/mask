@@ -20,11 +20,33 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if m, ok := got.Lookup("/id/one"); !ok || m != "work" {
-		t.Errorf("Lookup one = %q, %v", m, ok)
+	if r, ok := got.Lookup("/id/one"); !ok || r.Mask != "work" || r.None {
+		t.Errorf("Lookup one = %+v, %v", r, ok)
 	}
 	if ids := got.IDs(); len(ids) != 2 || ids[0] != "/id/one" {
 		t.Errorf("IDs = %v", ids)
+	}
+}
+
+func TestRecordNone(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "repos.toml")
+	s := New()
+	s.Record("/id", "/root", "work")
+	s.RecordNone("/id", "/root")
+	if err := s.SaveFile(path); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := LoadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, ok := got.Lookup("/id")
+	if !ok {
+		t.Fatal("entry missing")
+	}
+	if !r.None || r.Mask != "" {
+		t.Errorf("RecordNone = %+v, want None only", r)
 	}
 }
 
@@ -49,6 +71,13 @@ func TestForget(t *testing.T) {
 	}
 	if _, ok := s.Lookup("/id"); ok {
 		t.Error("entry should be gone")
+	}
+}
+
+func TestLookupMissingIsUnknown(t *testing.T) {
+	s := New()
+	if _, ok := s.Lookup("/nope"); ok {
+		t.Error("missing entry should report not-found")
 	}
 }
 

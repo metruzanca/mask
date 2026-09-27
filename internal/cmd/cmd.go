@@ -140,8 +140,10 @@ func newSwitch() *cobra.Command {
 			info, inRepo := currentRepo()
 			if inRepo {
 				payload.Repo = info.ID
-				if err := rememberRepo(info, name); err != nil {
-					fmt.Fprintf(cmd.ErrOrStderr(), "mask: could not remember repo: %v\n", err)
+				if cfg.Automatic() {
+					if err := rememberRepo(info, name); err != nil {
+						fmt.Fprintf(cmd.ErrOrStderr(), "mask: could not remember repo: %v\n", err)
+					}
 				}
 			}
 			out, err := shellout.Render(shell, payload)
@@ -164,9 +166,11 @@ func newOff() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if info, ok := currentRepo(); ok {
-				if err := forgetRepo(info); err != nil {
-					fmt.Fprintf(cmd.ErrOrStderr(), "mask: could not forget repo: %v\n", err)
+			if cfg, err := config.Load(); err == nil && cfg.Automatic() {
+				if info, ok := currentRepo(); ok {
+					if err := rememberNone(info); err != nil {
+						fmt.Fprintf(cmd.ErrOrStderr(), "mask: could not remember repo: %v\n", err)
+					}
 				}
 			}
 			out, err := shellout.Render(shell, maskops.OffPayload())
@@ -315,9 +319,13 @@ func newHook() *cobra.Command {
 				MaskExists:  func(name string) bool { _, ok := cfg.Get(name); return ok },
 			}
 			if inRepo {
-				if cached, ok := st.Lookup(info.ID); ok {
-					in.CachedMask = cached
-					in.HasCache = true
+				if rec, ok := st.Lookup(info.ID); ok {
+					if rec.None {
+						in.Cache = hookops.CacheNone
+					} else {
+						in.Cache = hookops.CacheMask
+						in.CachedMask = rec.Mask
+					}
 				}
 			}
 
@@ -383,15 +391,13 @@ func rememberRepo(info repo.Info, name string) error {
 	return st.Save()
 }
 
-// forgetRepo drops the remembered mask for info.
-func forgetRepo(info repo.Info) error {
+// rememberNone records that info was explicitly left without a mask.
+func rememberNone(info repo.Info) error {
 	st, err := state.Load()
 	if err != nil {
 		return err
 	}
-	if !st.Forget(info.ID) {
-		return nil
-	}
+	st.RecordNone(info.ID, info.Root)
 	return st.Save()
 }
 
@@ -419,10 +425,13 @@ func runStatus(cmd *cobra.Command) error {
 	if info, ok := currentRepo(); ok {
 		fmt.Fprintf(cmd.OutOrStdout(), "Repo: %s\n", info.Root)
 		if st, err := state.Load(); err == nil {
-			if cached, ok := st.Lookup(info.ID); ok {
-				fmt.Fprintf(cmd.OutOrStdout(), "Remembered here: %s\n", cached)
-			} else {
-				fmt.Fprintln(cmd.OutOrStdout(), "Remembered here: (none)")
+			switch rec, ok := st.Lookup(info.ID); {
+			case !ok:
+				fmt.Fprintln(cmd.OutOrStdout(), "Remembered here: never set")
+			case rec.None:
+				fmt.Fprintln(cmd.OutOrStdout(), "Remembered here: none (mask off here)")
+			default:
+				fmt.Fprintf(cmd.OutOrStdout(), "Remembered here: %s\n", rec.Mask)
 			}
 		}
 	}

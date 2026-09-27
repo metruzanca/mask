@@ -1,6 +1,6 @@
 # mask
 
-Wear a different git identity and SSH key per shell, without editing git config.
+Wear a different git identity without editing git config.
 
 `mask` sets your git `user.name`/`user.email` and the SSH key `git push` uses,
 so you can commit and push under different identities from the same machine.
@@ -25,7 +25,7 @@ off. It works like this:
 
 A repo's memory is written when you run `mask switch <name>` inside it, so
 `mask switch work` in a repo means "wear `work` here from now on". `mask off`
-both takes the mask off and forgets the repo, so it will not come back.
+in a repo is remembered too, as an explicit "no mask here", so it stays off.
 
 Every automatic change prints a notice like
 `mask: entered ~/dev/foo -> wearing "work"`.
@@ -59,19 +59,33 @@ mask switch          # toggle between two masks, dropdown for three or more
 mask switch work     # or name one directly
 mask                 # what you're wearing now
 mask list            # all configured masks
-mask off             # take it off, and forget the current repo
+mask off             # take it off, and remember that here
 mask settings        # automatic vs manual control
 mask settings off    # same, without the form
 ```
+
+## Defaults and masks
+
+How you split things up is up to you:
+
+- **Mask as your default.** Create a mask for your main identity and wear it in
+  your everyday repos. Everything is set explicitly, so you never depend on the
+  machine's global git config.
+- **Global config as your default.** Leave your main identity in `~/.gitconfig`
+  and create masks only for the other identities, such as `work`. Repos that
+  should run as the default stay unmasked; run `mask switch work` in the rest.
+
+Either way, automatic mode applies the mask a repo was last given, and a repo
+with no memory falls back to your global git config.
 
 ## Manual mode
 
 To take control, turn automatic mode off with `mask settings off` (or set
 `automatic = false` under `[settings]` in the config). The mask then only
 changes when you run `mask switch` / `mask off`, and it lasts for the shell
-session: a new terminal starts unmasked. The repo memory is still kept up to
-date, it just never changes your mask on its own. Turning automatic back on
-picks up right where you left off.
+session: a new terminal starts unmasked. Repo memory is not touched while
+manual, so `switch` and `off` change only this shell. Turning automatic back on
+picks up wherever the memory was left.
 
 ## Files
 

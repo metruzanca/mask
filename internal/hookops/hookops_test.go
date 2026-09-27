@@ -28,7 +28,7 @@ func TestSameRepoDoesNothing(t *testing.T) {
 	in := base()
 	in.CurrentRepo = "id"
 	in.CurrentMask = ""
-	in.HasCache = true
+	in.Cache = CacheMask
 	in.CachedMask = "work"
 	if d := Decide(in); d.Action != ActionNone {
 		t.Errorf("action = %v", d.Action)
@@ -37,7 +37,7 @@ func TestSameRepoDoesNothing(t *testing.T) {
 
 func TestEnterCachedSwitches(t *testing.T) {
 	in := base()
-	in.HasCache = true
+	in.Cache = CacheMask
 	in.CachedMask = "work"
 	in.CurrentMask = "personal"
 	d := Decide(in)
@@ -51,11 +51,30 @@ func TestEnterCachedSwitches(t *testing.T) {
 
 func TestEnterCachedAlreadyWorn(t *testing.T) {
 	in := base()
-	in.HasCache = true
+	in.Cache = CacheMask
 	in.CachedMask = "work"
 	in.CurrentMask = "work"
 	if d := Decide(in); d.Action != ActionNone {
 		t.Errorf("action = %v", d.Action)
+	}
+}
+
+func TestEnterCachedNoneTurnsOff(t *testing.T) {
+	in := base()
+	in.Cache = CacheNone
+	in.CurrentMask = "personal"
+	d := Decide(in)
+	if d.Action != ActionOff || d.RepoID != "id" {
+		t.Fatalf("got %+v", d)
+	}
+}
+
+func TestEnterCachedNoneAlreadyOff(t *testing.T) {
+	in := base()
+	in.Cache = CacheNone
+	in.CurrentMask = ""
+	if d := Decide(in); d.Action != ActionNone || d.RepoID != "id" {
+		t.Errorf("got %+v", d)
 	}
 }
 
@@ -78,7 +97,7 @@ func TestEnterUncachedWithNoMaskDoesNothing(t *testing.T) {
 
 func TestEnterStaleCacheForgets(t *testing.T) {
 	in := base()
-	in.HasCache = true
+	in.Cache = CacheMask
 	in.CachedMask = "gone"
 	in.MaskExists = func(string) bool { return false }
 	in.CurrentMask = "personal"
@@ -90,7 +109,7 @@ func TestEnterStaleCacheForgets(t *testing.T) {
 
 func TestEnterStaleCacheWithNoMaskForgetsOnly(t *testing.T) {
 	in := base()
-	in.HasCache = true
+	in.Cache = CacheMask
 	in.CachedMask = "gone"
 	in.MaskExists = func(string) bool { return false }
 	in.CurrentMask = ""
