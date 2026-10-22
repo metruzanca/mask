@@ -26,6 +26,8 @@ off. It works like this:
 A repo's memory is written when you run `mask switch <name>` inside it, so
 `mask switch work` in a repo means "wear `work` here from now on". `mask off`
 in a repo is remembered too, as an explicit "no mask here", so it stays off.
+`mask on` reverses that: it puts back the mask remembered for the repo, or the
+last mask worn in the shell when the repo has none.
 
 Every automatic change prints a notice like
 `mask: entered ~/dev/foo -> wearing "work"`.
@@ -60,6 +62,7 @@ mask switch work     # or name one directly
 mask                 # what you're wearing now
 mask list            # all configured masks
 mask off             # take it off, and remember that here
+mask on              # put the last mask back on
 mask settings        # automatic vs manual control
 mask settings off    # same, without the form
 ```

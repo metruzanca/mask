@@ -18,6 +18,7 @@ func BuildPayload(name string, m config.Mask) shellout.Payload {
 	ssh := fmt.Sprintf("ssh -i %s -o IdentitiesOnly=yes", key)
 
 	vars := []shellout.Assignment{
+		{Name: shellout.LastMaskEnv, Value: name},
 		{Name: "GIT_AUTHOR_NAME", Value: m.GitName},
 		{Name: "GIT_AUTHOR_EMAIL", Value: m.GitEmail},
 		{Name: "GIT_COMMITTER_NAME", Value: m.GitName},
@@ -83,6 +84,21 @@ func Select(cfg *config.Config, current, requested string) (SelectResult, error)
 	default:
 		return SelectResult{NeedUI: true}, nil
 	}
+}
+
+// RestoreTarget chooses the mask `mask on` should wear. A repo's remembered
+// mask wins inside that repo; otherwise the last mask worn in this shell is
+// restored. Unset or no-longer-configured names are skipped.
+func RestoreTarget(cfg *config.Config, last, repoMask string) (string, error) {
+	for _, name := range []string{repoMask, last} {
+		if name == "" {
+			continue
+		}
+		if _, ok := cfg.Get(name); ok {
+			return name, nil
+		}
+	}
+	return "", fmt.Errorf("no mask to restore; run `mask switch` first")
 }
 
 // Report is what `mask` prints about the current shell.

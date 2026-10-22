@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/metruzanca/mask/internal/config"
+	"github.com/metruzanca/mask/internal/shellout"
 )
 
 func cfgWith(names ...string) *config.Config {
@@ -110,6 +111,43 @@ func TestBuildPayload(t *testing.T) {
 	// core.sshCommand config value must equal GIT_SSH_COMMAND.
 	if vals["GIT_CONFIG_VALUE_2"] != vals["GIT_SSH_COMMAND"] {
 		t.Errorf("core.sshCommand mismatch: %q vs %q", vals["GIT_CONFIG_VALUE_2"], vals["GIT_SSH_COMMAND"])
+	}
+}
+
+func TestRestoreTarget(t *testing.T) {
+	cfg := cfgWith("work", "personal")
+
+	// The repo's remembered mask wins over the shell's last mask.
+	if got, err := RestoreTarget(cfg, "personal", "work"); err != nil || got != "work" {
+		t.Errorf("repo mask: got %q, %v; want work", got, err)
+	}
+	// Outside a repo (or with no repo memory), restore the last mask.
+	if got, err := RestoreTarget(cfg, "personal", ""); err != nil || got != "personal" {
+		t.Errorf("last mask: got %q, %v; want personal", got, err)
+	}
+	// A stale repo name falls back to the last mask.
+	if got, err := RestoreTarget(cfg, "personal", "gone"); err != nil || got != "personal" {
+		t.Errorf("stale repo mask: got %q, %v; want personal", got, err)
+	}
+	// Nothing usable is an error.
+	if _, err := RestoreTarget(cfg, "", ""); err == nil {
+		t.Error("no candidates should error")
+	}
+}
+
+func TestBuildPayloadRemembersLast(t *testing.T) {
+	p := BuildPayload("work", config.Mask{GitName: "W", GitEmail: "w@x.com"})
+	found := false
+	for _, a := range p.Vars {
+		if a.Name == shellout.LastMaskEnv {
+			found = true
+			if a.Value != "work" {
+				t.Errorf("last mask = %q, want work", a.Value)
+			}
+		}
+	}
+	if !found {
+		t.Errorf("payload lacks %s", shellout.LastMaskEnv)
 	}
 }
 

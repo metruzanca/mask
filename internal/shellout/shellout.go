@@ -1,6 +1,7 @@
-// Package shellout renders the shell code that `mask switch` and `mask off`
-// emit on stdout. The user's shell function pipes that stdout into `source`,
-// which is the only way a CLI can change its parent shell's environment.
+// Package shellout renders the shell code that `mask switch`, `mask off`, and
+// `mask on` emit on stdout. The user's shell function pipes that stdout into
+// `source`, which is the only way a CLI can change its parent shell's
+// environment.
 //
 // Everything is injected through the environment rather than written to
 // ~/.gitconfig, which is often a read-only Nix/home-manager symlink. Git's
@@ -43,6 +44,11 @@ func Parse(s string) (Shell, bool) {
 	}
 	return "", false
 }
+
+// LastMaskEnv records the most recent mask in the shell, so `mask on` can put
+// it back after `mask off`. It is deliberately not in managedVars: turning a
+// mask off clears the worn identity but keeps the name for restore.
+const LastMaskEnv = "MASK_LAST_NAME"
 
 // managedVars are the fixed environment variables mask owns. They are always
 // cleared before a new mask is applied so no stale value leaks between masks.
@@ -171,7 +177,7 @@ func DetectShell(env func(string) string) (Shell, bool) {
 const fishInit = `# mask init fish (generated, do not edit)
 function mask
     switch "$argv[1]"
-        case switch off
+        case switch off on
             command mask --shell=fish $argv | source
         case '*'
             command mask $argv
@@ -187,7 +193,7 @@ func shInit(shell string) string {
 	return `# mask init ` + shell + ` (generated, do not edit)
 mask() {
     case "$1" in
-        switch|off) eval "$(command mask --shell=` + shell + ` "$@")" ;;
+        switch|off|on) eval "$(command mask --shell=` + shell + ` "$@")" ;;
         *) command mask "$@" ;;
     esac
 }
@@ -204,7 +210,7 @@ func zshInit(shell string) string {
 	return `# mask init ` + shell + ` (generated, do not edit)
 mask() {
     case "$1" in
-        switch|off) eval "$(command mask --shell=` + shell + ` "$@")" ;;
+        switch|off|on) eval "$(command mask --shell=` + shell + ` "$@")" ;;
         *) command mask "$@" ;;
     esac
 }

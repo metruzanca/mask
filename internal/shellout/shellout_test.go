@@ -122,6 +122,9 @@ func TestOffPayloadClearsEverything(t *testing.T) {
 			t.Errorf("off missing clear of %s", name)
 		}
 	}
+	if strings.Contains(out, "set -e "+LastMaskEnv) {
+		t.Errorf("off should preserve %s:\n%s", LastMaskEnv, out)
+	}
 }
 
 func TestInitDeclaresShell(t *testing.T) {
@@ -137,11 +140,14 @@ func TestInitDeclaresShell(t *testing.T) {
 	if !strings.Contains(zshOut, `command mask --shell=zsh "$@"`) {
 		t.Errorf("zsh init must declare --shell=zsh:\n%s", zshOut)
 	}
-	if !strings.Contains(fishOut, "case switch off") {
-		t.Errorf("fish init should source only switch/off:\n%s", fishOut)
+	if !strings.Contains(fishOut, "case switch off on") {
+		t.Errorf("fish init should source switch/off/on:\n%s", fishOut)
 	}
-	if !strings.Contains(bashOut, "switch|off)") {
-		t.Errorf("bash init should source only switch/off:\n%s", bashOut)
+	if !strings.Contains(bashOut, "switch|off|on)") {
+		t.Errorf("bash init should source switch/off/on:\n%s", bashOut)
+	}
+	if !strings.Contains(zshOut, "switch|off|on)") {
+		t.Errorf("zsh init should source switch/off/on:\n%s", zshOut)
 	}
 }
 

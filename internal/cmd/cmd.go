@@ -1,9 +1,9 @@
 // Package cmd wires the mask CLI together with cobra.
 //
-// Commands that change the shell environment (`switch`, `off`) print shell
-// code to stdout; the wrapper function installed by `mask init` pipes that
-// stdout into `source`/`eval`. All other output and all errors go to stderr so
-// they can never be mistaken for shell code.
+// Commands that change the shell environment (`switch`, `on`, `off`) print
+// shell code to stdout; the wrapper function installed by `mask init` pipes
+// that stdout into `source`/`eval`. All other output and all errors go to
+// stderr so they can never be mistaken for shell code.
 package cmd
 
 import (
@@ -55,6 +55,7 @@ func newRoot() *cobra.Command {
 	root.PersistentFlags().String("shell", "", "shell to emit code for (set by the installed wrapper)")
 	root.AddCommand(newCreate())
 	root.AddCommand(newSwitch())
+	root.AddCommand(newOn())
 	root.AddCommand(newOff())
 	root.AddCommand(newList())
 	root.AddCommand(newInit())
@@ -138,6 +139,56 @@ func newSwitch() *cobra.Command {
 			}
 			payload := maskops.BuildPayload(name, m)
 			info, inRepo := currentRepo()
+			if inRepo {
+				payload.Repo = info.ID
+				if cfg.Automatic() {
+					if err := rememberRepo(info, name); err != nil {
+						fmt.Fprintf(cmd.ErrOrStderr(), "mask: could not remember repo: %v\n", err)
+					}
+				}
+			}
+			out, err := shellout.Render(shell, payload)
+			if err != nil {
+				return err
+			}
+			_, err = io.WriteString(cmd.OutOrStdout(), out)
+			return err
+		},
+	}
+}
+
+func newOn() *cobra.Command {
+	return &cobra.Command{
+		Use:   "on",
+		Short: "Put the last mask back on",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.Load()
+			if err != nil {
+				if errors.Is(err, config.ErrNotExist) {
+					return errors.New("no masks defined; run `mask create` first")
+				}
+				return err
+			}
+			info, inRepo := currentRepo()
+			repoMask := ""
+			if inRepo {
+				if st, err := state.Load(); err == nil {
+					if rec, ok := st.Lookup(info.ID); ok && !rec.None {
+						repoMask = rec.Mask
+					}
+				}
+			}
+			name, err := maskops.RestoreTarget(cfg, os.Getenv(shellout.LastMaskEnv), repoMask)
+			if err != nil {
+				return err
+			}
+			m, _ := cfg.Get(name)
+			shell, err := resolveShell(cmd)
+			if err != nil {
+				return err
+			}
+			payload := maskops.BuildPayload(name, m)
 			if inRepo {
 				payload.Repo = info.ID
 				if cfg.Automatic() {
