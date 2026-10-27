@@ -201,6 +201,11 @@ func newOn() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if inRepo {
+				fmt.Fprintf(cmd.ErrOrStderr(), "mask: wearing %q in %s\n", name, info.Root)
+			} else {
+				fmt.Fprintf(cmd.ErrOrStderr(), "mask: wearing %q\n", name)
+			}
 			_, err = io.WriteString(cmd.OutOrStdout(), out)
 			return err
 		},
