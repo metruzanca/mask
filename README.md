@@ -62,8 +62,9 @@ Now create your first mask:
 $ mask create
 ```
 
-The form asks for a name, git name, email, and SSH key. Then pick a repository
-and choose a mask there:
+The form asks for a name, git name, email, and SSH key. If you do not have a
+key yet, pick **Create a new SSH key** and mask runs `ssh-keygen` for you
+(Ed25519, optional passphrase). Then pick a repository and choose a mask there:
 
 ```sh
 $ cd ~/dev/work-site
@@ -115,7 +116,7 @@ directory hook runs.
 ## Usage
 
 ```sh
-mask create          # form: name, git user.name/email, SSH key
+mask create          # form: name, git user.name/email, SSH key (pick or create)
 mask switch          # toggle between two masks, dropdown for three or more
 mask switch work     # or name one directly
 mask                 # what you're wearing now

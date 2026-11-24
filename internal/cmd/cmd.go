@@ -85,6 +85,16 @@ func newCreate() *cobra.Command {
 			if _, exists := cfg.Get(res.Name); exists {
 				return fmt.Errorf("mask %q already exists", res.Name)
 			}
+			if res.NewKey {
+				if err := ui.GenerateSSHKey(res.NewKeyPath, res.GitEmail, res.Passphrase); err != nil {
+					return err
+				}
+				fmt.Fprintf(cmd.ErrOrStderr(), "Created SSH key %s\n", res.NewKeyPath)
+				fmt.Fprintf(cmd.ErrOrStderr(), "Public key %s.pub: add it to your Git host\n", res.NewKeyPath)
+				if res.Passphrase != "" {
+					fmt.Fprintf(cmd.ErrOrStderr(), "Unlock it for this session with `ssh-add %s`\n", res.NewKeyPath)
+				}
+			}
 			cfg.Set(res.Name, config.Mask{
 				GitName:  res.GitName,
 				GitEmail: res.GitEmail,

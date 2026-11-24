@@ -4,12 +4,18 @@
 package ui
 
 import (
+	"bytes"
+	"errors"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
 
 	"github.com/charmbracelet/huh"
+
+	"github.com/metruzanca/mask/internal/config"
 )
 
 // CreateResult holds the values collected by the create form.
@@ -18,32 +24,91 @@ type CreateResult struct {
 	GitName  string
 	GitEmail string
 	SSHKey   string
+
+	// NewKey is true when SSHKey should be generated before saving the mask.
+	NewKey bool
+	// NewKeyPath is the display path (not expanded) for the generated key.
+	NewKeyPath string
+	// Passphrase protects the generated key. It is never written to config.
+	Passphrase string
 }
+
+const (
+	keyChoiceManual = "\x00mask-manual-key"
+	keyChoiceCreate = "\x00mask-create-key"
+)
 
 // CreateForm asks for a new mask's name, git identity, and SSH key.
 func CreateForm() (CreateResult, error) {
 	var res CreateResult
+	var confirmPassphrase string
 
 	keys := SSHKeys()
-	keyField := huh.NewInput().
-		Title("SSH key").
-		Description("Path to the private key used for git push").
-		Placeholder("~/.ssh/id_ed25519").
-		Value(&res.SSHKey)
-
-	var keyGroup *huh.Group
+	keyChoice := keyChoiceCreate
 	if len(keys) > 0 {
-		res.SSHKey = keys[0]
-		keyGroup = huh.NewGroup(
-			huh.NewSelect[string]().
-				Title("SSH key").
-				Description("Which key should git push use?").
-				Options(huh.NewOptions(keys...)...).
-				Value(&res.SSHKey),
-		)
-	} else {
-		keyGroup = huh.NewGroup(keyField)
+		keyChoice = keys[0]
 	}
+
+	keyOptions := make([]huh.Option[string], 0, len(keys)+2)
+	for _, k := range keys {
+		keyOptions = append(keyOptions, huh.NewOption(k, k))
+	}
+	keyOptions = append(keyOptions,
+		huh.NewOption("Enter a path manually…", keyChoiceManual),
+		huh.NewOption("Create a new SSH key…", keyChoiceCreate),
+	)
+
+	keyGroup := huh.NewGroup(
+		huh.NewSelect[string]().
+			Title("SSH key").
+			Description("Which key should git push use?").
+			Options(keyOptions...).
+			Value(&keyChoice),
+	)
+
+	manualGroup := huh.NewGroup(
+		huh.NewInput().
+			Title("SSH key path").
+			Description("Path to the private key used for git push").
+			Placeholder("~/.ssh/id_ed25519").
+			Value(&res.SSHKey).
+			Validate(func(s string) error {
+				if strings.TrimSpace(s) == "" {
+					return errEmpty("SSH key path")
+				}
+				return nil
+			}),
+	).WithHideFunc(func() bool { return keyChoice != keyChoiceManual })
+
+	createGroup := huh.NewGroup(
+		huh.NewInput().
+			Title("New key path").
+			Description("Leave blank to use ~/.ssh/id_ed25519_<mask name>").
+			Placeholder("~/.ssh/id_ed25519_<mask name>").
+			Value(&res.NewKeyPath).
+			Validate(func(s string) error {
+				path := strings.TrimSpace(s)
+				if path == "" {
+					path = defaultKeyPath(res.Name)
+				}
+				return checkNewKeyPath(path)
+			}),
+		huh.NewInput().
+			Title("Passphrase (optional)").
+			Description("Leave blank for no passphrase").
+			EchoMode(huh.EchoModePassword).
+			Value(&res.Passphrase),
+		huh.NewInput().
+			Title("Confirm passphrase").
+			EchoMode(huh.EchoModePassword).
+			Value(&confirmPassphrase).
+			Validate(func(s string) error {
+				if s != res.Passphrase {
+					return errors.New("passphrases do not match")
+				}
+				return nil
+			}),
+	).WithHideFunc(func() bool { return keyChoice != keyChoiceCreate })
 
 	form := huh.NewForm(
 		huh.NewGroup(
@@ -80,6 +145,8 @@ func CreateForm() (CreateResult, error) {
 				}),
 		),
 		keyGroup,
+		manualGroup,
+		createGroup,
 	)
 
 	if err := form.Run(); err != nil {
@@ -88,7 +155,21 @@ func CreateForm() (CreateResult, error) {
 	res.Name = strings.TrimSpace(res.Name)
 	res.GitName = strings.TrimSpace(res.GitName)
 	res.GitEmail = strings.TrimSpace(res.GitEmail)
-	res.SSHKey = strings.TrimSpace(res.SSHKey)
+
+	switch keyChoice {
+	case keyChoiceCreate:
+		res.NewKey = true
+		res.NewKeyPath = strings.TrimSpace(res.NewKeyPath)
+		if res.NewKeyPath == "" {
+			res.NewKeyPath = defaultKeyPath(res.Name)
+		}
+		res.SSHKey = res.NewKeyPath
+	case keyChoiceManual:
+		res.SSHKey = strings.TrimSpace(res.SSHKey)
+	default:
+		res.SSHKey = keyChoice
+	}
+
 	return res, nil
 }
 
@@ -165,6 +246,86 @@ func SSHKeys() []string {
 	}
 	sort.Strings(keys)
 	return keys
+}
+
+// defaultKeyPath suggests a private key path for a mask name.
+func defaultKeyPath(name string) string {
+	slug := slugifyKeyName(name)
+	if slug == "" {
+		slug = "mask"
+	}
+	return "~/.ssh/id_ed25519_" + slug
+}
+
+// slugifyKeyName turns a mask name into a safe file name fragment.
+func slugifyKeyName(name string) string {
+	name = strings.ToLower(strings.TrimSpace(name))
+	var b strings.Builder
+	lastDash := false
+	for _, r := range name {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '_':
+			b.WriteRune(r)
+			lastDash = false
+		default:
+			if b.Len() > 0 && !lastDash {
+				b.WriteByte('-')
+				lastDash = true
+			}
+		}
+	}
+	return strings.Trim(b.String(), "-")
+}
+
+// checkNewKeyPath reports why path cannot be used for a new key.
+func checkNewKeyPath(displayPath string) error {
+	path := strings.TrimSpace(displayPath)
+	if path == "" {
+		return errEmpty("SSH key path")
+	}
+	if strings.HasSuffix(path, ".pub") {
+		return errors.New("enter the private key path, without .pub")
+	}
+	for _, candidate := range []string{path, path + ".pub"} {
+		if _, err := os.Stat(config.ExpandPath(candidate)); err == nil {
+			return fmt.Errorf("%s already exists", candidate)
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("cannot check %s: %w", candidate, err)
+		}
+	}
+	return nil
+}
+
+// GenerateSSHKey creates an Ed25519 key at path. The passphrase may be empty;
+// when set it is fed to ssh-keygen on stdin, so it never appears in the process
+// arguments. The comment is typically the git email.
+func GenerateSSHKey(path, comment, passphrase string) error {
+	if err := checkNewKeyPath(path); err != nil {
+		return err
+	}
+	expanded := config.ExpandPath(strings.TrimSpace(path))
+	if err := os.MkdirAll(filepath.Dir(expanded), 0o700); err != nil {
+		return fmt.Errorf("create key directory: %w", err)
+	}
+
+	args := []string{"-q", "-t", "ed25519", "-f", expanded, "-C", comment}
+	if passphrase == "" {
+		args = append(args, "-N", "")
+	}
+	cmd := exec.Command("ssh-keygen", args...)
+	if passphrase != "" {
+		cmd.Stdin = strings.NewReader(passphrase + "\n" + passphrase + "\n")
+	}
+	var output bytes.Buffer
+	cmd.Stdout = &output
+	cmd.Stderr = &output
+	if err := cmd.Run(); err != nil {
+		if msg := strings.TrimSpace(output.String()); msg != "" {
+			return fmt.Errorf("ssh-keygen: %w: %s", err, msg)
+		}
+		return fmt.Errorf("ssh-keygen: %w", err)
+	}
+	return nil
 }
 
 type errEmpty string
