@@ -161,8 +161,11 @@ func newSwitch() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			_, err = io.WriteString(cmd.OutOrStdout(), out)
-			return err
+			if _, err := io.WriteString(cmd.OutOrStdout(), out); err != nil {
+				return err
+			}
+			fmt.Fprintf(cmd.ErrOrStderr(), "mask: %s\n", maskChangeNotice("wearing", name, info, inRepo))
+			return nil
 		},
 	}
 }
@@ -211,13 +214,11 @@ func newOn() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if inRepo {
-				fmt.Fprintf(cmd.ErrOrStderr(), "mask: wearing %q in %s\n", name, info.Root)
-			} else {
-				fmt.Fprintf(cmd.ErrOrStderr(), "mask: wearing %q\n", name)
+			if _, err := io.WriteString(cmd.OutOrStdout(), out); err != nil {
+				return err
 			}
-			_, err = io.WriteString(cmd.OutOrStdout(), out)
-			return err
+			fmt.Fprintf(cmd.ErrOrStderr(), "mask: %s\n", maskChangeNotice("wearing", name, info, inRepo))
+			return nil
 		},
 	}
 }
@@ -232,8 +233,10 @@ func newOff() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			worn := os.Getenv("MASK_NAME")
+			info, inRepo := currentRepo()
 			if cfg, err := config.Load(); err == nil && cfg.Automatic() {
-				if info, ok := currentRepo(); ok {
+				if inRepo {
 					if err := rememberNone(info); err != nil {
 						fmt.Fprintf(cmd.ErrOrStderr(), "mask: could not remember repo: %v\n", err)
 					}
@@ -243,8 +246,13 @@ func newOff() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			_, err = io.WriteString(cmd.OutOrStdout(), out)
-			return err
+			if _, err := io.WriteString(cmd.OutOrStdout(), out); err != nil {
+				return err
+			}
+			if worn != "" {
+				fmt.Fprintf(cmd.ErrOrStderr(), "mask: %s\n", maskChangeNotice("took off", worn, info, inRepo))
+			}
+			return nil
 		},
 	}
 }
@@ -465,6 +473,14 @@ func rememberNone(info repo.Info) error {
 	}
 	st.RecordNone(info.ID, info.Root)
 	return st.Save()
+}
+
+// maskChangeNotice describes a mask going on or off for the user.
+func maskChangeNotice(verb, name string, info repo.Info, inRepo bool) string {
+	if inRepo {
+		return fmt.Sprintf("%s %q in %s", verb, name, info.Root)
+	}
+	return fmt.Sprintf("%s %q", verb, name)
 }
 
 func runStatus(cmd *cobra.Command) error {

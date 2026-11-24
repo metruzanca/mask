@@ -69,6 +69,7 @@ key yet, pick **Create a new SSH key** and mask runs `ssh-keygen` for you
 ```sh
 $ cd ~/dev/work-site
 $ mask switch work
+mask: wearing "work" in /home/sam/dev/work-site
 $ mask
 Wearing mask: work
 Git identity: Sam Rivera <sam@work.example>
@@ -84,7 +85,7 @@ $ cd ~/dev/work-site
 mask: entered /home/sam/dev/work-site -> wearing "work"
 
 $ cd ~/dev/personal-blog
-mask: entered /home/sam/dev/personal-blog -> no mask remembered, mask off
+mask: entered /home/sam/dev/personal-blog -> no mask remembered, took off "work"
 ```
 
 Wear a mask in `personal-blog` once, and it will be restored on every later
@@ -134,13 +135,15 @@ mask settings off    # same, without the form
   which also works in scripts and non-interactive terminals.
 * `mask switch <name>` inside a repository is remembered for that repository
   when automatic mode is on.
+* A successful switch prints a one-line confirmation naming the mask.
 
 ### Turning a mask off, and back on
 
 `mask off` clears the identity and remembers "no mask here" for the current
 repository, so it stays off. `mask on` reverses that: it restores the mask
 remembered for the repository, or the last mask worn in the shell when the
-repository has no memory.
+repository has no memory. `mask off` prints a one-line confirmation naming the
+mask it removed, and stays quiet when no mask is worn.
 
 ## Automatic mode
 
@@ -155,8 +158,9 @@ When the shell wrapper is loaded, `mask` reacts to directory changes:
   of the same repository share one memory entry.
 * A new shell that starts inside a repo syncs immediately.
 
-Every automatic change prints a notice like
-`mask: entered ~/dev/foo -> wearing "work"`.
+Every automatic change prints a notice naming the mask that went on or off, for
+example `mask: entered ~/dev/foo -> wearing "work"` or
+`mask: left repo -> took off "work"`.
 
 Repo memory is written when you run `mask switch <name>` inside a repository.
 `mask off` inside a repository records an explicit "no mask here", so the

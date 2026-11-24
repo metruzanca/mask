@@ -1,6 +1,7 @@
 package hookops
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/metruzanca/mask/internal/repo"
@@ -47,6 +48,9 @@ func TestEnterCachedSwitches(t *testing.T) {
 	if d.RepoID != "id" || d.Notice == "" || d.Log == "" {
 		t.Errorf("missing repo/notice/log: %+v", d)
 	}
+	if !strings.Contains(d.Notice, `wearing "work"`) {
+		t.Errorf("notice = %q, want mask name", d.Notice)
+	}
 }
 
 func TestEnterCachedAlreadyWorn(t *testing.T) {
@@ -67,6 +71,9 @@ func TestEnterCachedNoneTurnsOff(t *testing.T) {
 	if d.Action != ActionOff || d.RepoID != "id" {
 		t.Fatalf("got %+v", d)
 	}
+	if !strings.Contains(d.Notice, `took off "personal"`) {
+		t.Errorf("notice = %q, want removed mask name", d.Notice)
+	}
 }
 
 func TestEnterCachedNoneAlreadyOff(t *testing.T) {
@@ -84,6 +91,9 @@ func TestEnterUncachedTurnsOff(t *testing.T) {
 	d := Decide(in)
 	if d.Action != ActionOff || d.RepoID != "id" {
 		t.Fatalf("got %+v", d)
+	}
+	if !strings.Contains(d.Notice, `took off "personal"`) {
+		t.Errorf("notice = %q, want removed mask name", d.Notice)
 	}
 }
 
@@ -104,6 +114,9 @@ func TestEnterStaleCacheForgets(t *testing.T) {
 	d := Decide(in)
 	if d.Action != ActionOff || !d.Forget {
 		t.Fatalf("got %+v", d)
+	}
+	if !strings.Contains(d.Notice, `"gone"`) || !strings.Contains(d.Notice, `took off "personal"`) {
+		t.Errorf("notice = %q, want stale and removed mask names", d.Notice)
 	}
 }
 
@@ -127,6 +140,9 @@ func TestLeaveRepoTurnsOff(t *testing.T) {
 	d := Decide(in)
 	if d.Action != ActionOff || d.RepoID != "" {
 		t.Fatalf("got %+v", d)
+	}
+	if !strings.Contains(d.Notice, `took off "work"`) {
+		t.Errorf("notice = %q, want removed mask name", d.Notice)
 	}
 }
 

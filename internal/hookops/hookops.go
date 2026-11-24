@@ -90,7 +90,7 @@ func Decide(in Input) Decision {
 			return d
 		}
 		d.Action = ActionOff
-		d.Notice = "left repo -> mask off"
+		d.Notice = fmt.Sprintf("left repo -> took off %q", in.CurrentMask)
 		d.Log = d.Notice
 		return d
 	}
@@ -102,7 +102,7 @@ func Decide(in Input) Decision {
 			return d
 		}
 		d.Action = ActionOff
-		d.Notice = fmt.Sprintf("entered %s -> no mask here, mask off", root)
+		d.Notice = fmt.Sprintf("entered %s -> no mask here, took off %q", root, in.CurrentMask)
 		d.Log = d.Notice
 	case CacheMask:
 		if in.MaskExists != nil && in.MaskExists(in.CachedMask) {
@@ -121,14 +121,14 @@ func Decide(in Input) Decision {
 			return d
 		}
 		d.Action = ActionOff
-		d.Notice = fmt.Sprintf("entered %s -> remembered mask %q gone, mask off", root, in.CachedMask)
+		d.Notice = fmt.Sprintf("entered %s -> remembered mask %q no longer exists, took off %q", root, in.CachedMask, in.CurrentMask)
 		d.Log = d.Notice
 	default:
 		if in.CurrentMask == "" {
 			return d
 		}
 		d.Action = ActionOff
-		d.Notice = fmt.Sprintf("entered %s -> no mask remembered, mask off", root)
+		d.Notice = fmt.Sprintf("entered %s -> no mask remembered, took off %q", root, in.CurrentMask)
 		d.Log = d.Notice
 	}
 	return d
