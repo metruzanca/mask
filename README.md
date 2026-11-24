@@ -17,7 +17,7 @@ git config, and secrets never touch shell history.
 By default it is **automatic**: enter a repository and it puts on the mask you
 last wore there; leave and it takes the mask off.
 
-[Installation](#installation) • [Quick start](#quick-start) • [Automatic mode](#automatic-mode) • [Configuration](#configuration) • [Troubleshooting](#troubleshooting)
+[Installation](#installation) • [Quick start](#quick-start) • [Automatic mode](#automatic-mode) • [Starship prompt](#starship-prompt) • [Configuration](#configuration) • [Troubleshooting](#troubleshooting)
 
 ## Features
 
@@ -144,6 +144,37 @@ repository, so it stays off. `mask on` reverses that: it restores the mask
 remembered for the repository, or the last mask worn in the shell when the
 repository has no memory. `mask off` prints a one-line confirmation naming the
 mask it removed, and stays quiet when no mask is worn.
+
+### Starship prompt
+
+[Starship](https://starship.rs) can show which mask you are wearing. The shell
+wrapper exports `MASK_NAME` in every shell where a mask is on, so a starship
+custom module can read it directly.
+
+Add this to `~/.config/starship.toml`:
+
+```toml
+[custom.mask]
+command = 'printf %s "$MASK_NAME"'
+when = 'test -n "$MASK_NAME"'
+format = '[🎭 $output](bold purple) '
+description = "currently worn mask"
+```
+
+The prompt shows `🎭 work` when a mask is worn and nothing when no mask is
+worn. `$all` already includes custom modules, so the top-level `format` needs
+no change. To place the module in a specific position, reference it by name:
+
+```toml
+format = "$time${custom.mask}$all"
+```
+
+The command runs in `sh`, so the same configuration works in fish, bash, and
+zsh. Starship escapes module output by default, so a mask name cannot inject
+shell code into your prompt.
+
+The prompt reflects the shell, not repository memory: a new shell picks up the
+mask for its directory when the wrapper's startup hook runs.
 
 ## Automatic mode
 
