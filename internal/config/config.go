@@ -26,6 +26,10 @@ type Mask struct {
 // can default to on while an explicit `automatic = false` is honored.
 type Settings struct {
 	Automatic *bool `toml:"automatic,omitempty"`
+
+	// Notify controls whether mask changes are announced on stderr. Pointers
+	// so an absent field can default to on while `notify = false` is honored.
+	Notify *bool `toml:"notify,omitempty"`
 }
 
 // Config is the whole config file.
@@ -46,6 +50,20 @@ func (c *Config) Automatic() bool {
 // SetAutomatic writes the automatic setting.
 func (c *Config) SetAutomatic(v bool) {
 	c.Settings.Automatic = &v
+}
+
+// Notify reports whether mask changes should be announced on stderr. It
+// defaults to true when the setting is absent.
+func (c *Config) Notify() bool {
+	if c.Settings.Notify == nil {
+		return true
+	}
+	return *c.Settings.Notify
+}
+
+// SetNotify writes the notify setting.
+func (c *Config) SetNotify(v bool) {
+	c.Settings.Notify = &v
 }
 
 // ErrNotExist is returned by Load when there is no config file yet.

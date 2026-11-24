@@ -126,6 +126,8 @@ mask off             # take it off, and remember that here
 mask on              # put the last mask back on
 mask settings        # automatic vs manual control
 mask settings off    # same, without the form
+mask config          # show all settings
+mask config setting.notify false   # silence change notices (creates config if missing)
 ```
 
 ### Switching
@@ -176,6 +178,11 @@ shell code into your prompt.
 The prompt reflects the shell, not repository memory: a new shell picks up the
 mask for its directory when the wrapper's startup hook runs.
 
+If Starship already tells you which mask is on, the per-change notices printed
+to stderr become noise. Set `notify = false` under `[settings]` in the config
+file, or run `mask config setting.notify false`, to silence them; the shell code
+and repository memory still work as usual.
+
 ## Automatic mode
 
 When the shell wrapper is loaded, `mask` reacts to directory changes:
@@ -191,7 +198,9 @@ When the shell wrapper is loaded, `mask` reacts to directory changes:
 
 Every automatic change prints a notice naming the mask that went on or off, for
 example `mask: entered ~/dev/foo -> wearing "work"` or
-`mask: left repo -> took off "work"`.
+`mask: left repo -> took off "work"`. Set `notify = false` under `[settings]`
+or run `mask config setting.notify false` to turn these notices off; the mask
+still changes, it just does so quietly.
 
 Repo memory is written when you run `mask switch <name>` inside a repository.
 `mask off` inside a repository records an explicit "no mask here", so the
@@ -234,6 +243,17 @@ file to add environment variables or fine-tune settings.
 
 [settings]
 automatic = true
+notify    = true
+```
+
+Both settings can also be changed from the CLI with `mask config`, which
+creates the config file when it is missing:
+
+```sh
+mask config                          # show every setting
+mask config setting.notify           # show one setting
+mask config setting.notify false     # change one setting
+mask config setting.automatic true
 ```
 
 ### Choosing a default

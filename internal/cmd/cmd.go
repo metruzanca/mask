@@ -60,6 +60,7 @@ func newRoot() *cobra.Command {
 	root.AddCommand(newList())
 	root.AddCommand(newInit())
 	root.AddCommand(newSettings())
+	root.AddCommand(newConfig())
 	root.AddCommand(newVersion())
 	root.AddCommand(newHook())
 	return root
@@ -164,7 +165,9 @@ func newSwitch() *cobra.Command {
 			if _, err := io.WriteString(cmd.OutOrStdout(), out); err != nil {
 				return err
 			}
-			fmt.Fprintf(cmd.ErrOrStderr(), "mask: %s\n", maskChangeNotice("wearing", name, info, inRepo))
+			if cfg.Notify() {
+				fmt.Fprintf(cmd.ErrOrStderr(), "mask: %s\n", maskChangeNotice("wearing", name, info, inRepo))
+			}
 			return nil
 		},
 	}
@@ -217,7 +220,9 @@ func newOn() *cobra.Command {
 			if _, err := io.WriteString(cmd.OutOrStdout(), out); err != nil {
 				return err
 			}
-			fmt.Fprintf(cmd.ErrOrStderr(), "mask: %s\n", maskChangeNotice("wearing", name, info, inRepo))
+			if cfg.Notify() {
+				fmt.Fprintf(cmd.ErrOrStderr(), "mask: %s\n", maskChangeNotice("wearing", name, info, inRepo))
+			}
 			return nil
 		},
 	}
@@ -235,8 +240,10 @@ func newOff() *cobra.Command {
 			}
 			worn := os.Getenv("MASK_NAME")
 			info, inRepo := currentRepo()
-			if cfg, err := config.Load(); err == nil && cfg.Automatic() {
-				if inRepo {
+			notify := true
+			if cfg, err := config.Load(); err == nil {
+				notify = cfg.Notify()
+				if cfg.Automatic() && inRepo {
 					if err := rememberNone(info); err != nil {
 						fmt.Fprintf(cmd.ErrOrStderr(), "mask: could not remember repo: %v\n", err)
 					}
@@ -249,7 +256,7 @@ func newOff() *cobra.Command {
 			if _, err := io.WriteString(cmd.OutOrStdout(), out); err != nil {
 				return err
 			}
-			if worn != "" {
+			if worn != "" && notify {
 				fmt.Fprintf(cmd.ErrOrStderr(), "mask: %s\n", maskChangeNotice("took off", worn, info, inRepo))
 			}
 			return nil
@@ -358,6 +365,97 @@ func newSettings() *cobra.Command {
 	return cmd
 }
 
+// newConfig updates settings by key, git-config style. Without a value it
+// prints the current value, and without a key it prints every setting.
+func newConfig() *cobra.Command {
+	return &cobra.Command{
+		Use:   "config [key] [value]",
+		Short: "Show or change config values",
+		Long: "Show or change values in the mask config file. The file is created\n" +
+			"when it does not exist yet.\n\n" +
+			"Available settings:\n" +
+			"  setting.automatic   Apply each repo's remembered mask on directory change (true/false)\n" +
+			"  setting.notify      Print a notice when the mask changes (true/false)\n\n" +
+			"Examples:\n" +
+			"  mask config setting.notify false\n" +
+			"  mask config setting.automatic true\n" +
+			"  mask config setting.notify",
+		Args: cobra.RangeArgs(0, 2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := loadOrInit()
+			if err != nil {
+				return err
+			}
+			switch len(args) {
+			case 0:
+				for _, key := range settingKeys {
+					v, _ := settingValue(cfg, key)
+					fmt.Fprintf(cmd.OutOrStdout(), "%s = %t\n", key, v)
+				}
+				return nil
+			case 1:
+				v, err := settingValue(cfg, args[0])
+				if err != nil {
+					return err
+				}
+				fmt.Fprintf(cmd.OutOrStdout(), "%s = %t\n", args[0], v)
+				return nil
+			}
+			key, value := args[0], args[1]
+			v, err := parseSettingBool(value)
+			if err != nil {
+				return err
+			}
+			if err := setSetting(cfg, key, v); err != nil {
+				return err
+			}
+			if err := cfg.Save(); err != nil {
+				return err
+			}
+			fmt.Fprintf(cmd.ErrOrStderr(), "%s = %t\n", key, v)
+			return nil
+		},
+	}
+}
+
+// settingKeys lists the settings accepted by `mask config`, in display order.
+var settingKeys = []string{"setting.automatic", "setting.notify"}
+
+// settingValue reads the named setting, reporting unknown keys.
+func settingValue(cfg *config.Config, key string) (bool, error) {
+	switch key {
+	case "setting.automatic":
+		return cfg.Automatic(), nil
+	case "setting.notify":
+		return cfg.Notify(), nil
+	}
+	return false, fmt.Errorf("unknown setting %q; available settings: %s", key, strings.Join(settingKeys, ", "))
+}
+
+// setSetting writes the named setting, reporting unknown keys.
+func setSetting(cfg *config.Config, key string, v bool) error {
+	switch key {
+	case "setting.automatic":
+		cfg.SetAutomatic(v)
+	case "setting.notify":
+		cfg.SetNotify(v)
+	default:
+		return fmt.Errorf("unknown setting %q; available settings: %s", key, strings.Join(settingKeys, ", "))
+	}
+	return nil
+}
+
+// parseSettingBool accepts the spellings people expect from settings commands.
+func parseSettingBool(s string) (bool, error) {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "true", "on", "yes", "1":
+		return true, nil
+	case "false", "off", "no", "0":
+		return false, nil
+	}
+	return false, fmt.Errorf("invalid value %q; use true or false", s)
+}
+
 // newHook is the hidden command the shell's directory hook calls. It prints
 // shell code to stdout and any notice to stderr.
 func newHook() *cobra.Command {
@@ -419,7 +517,7 @@ func newHook() *cobra.Command {
 					fmt.Fprintf(cmd.ErrOrStderr(), "mask: could not write log: %v\n", err)
 				}
 			}
-			if d.Notice != "" {
+			if d.Notice != "" && cfg.Notify() {
 				fmt.Fprintf(cmd.ErrOrStderr(), "mask: %s\n", d.Notice)
 			}
 

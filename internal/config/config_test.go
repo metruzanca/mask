@@ -111,6 +111,7 @@ func TestSettingsRoundTrip(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.toml")
 	cfg := &Config{}
 	cfg.SetAutomatic(false)
+	cfg.SetNotify(false)
 	cfg.Set("work", Mask{GitName: "W"})
 	if err := cfg.SaveFile(path); err != nil {
 		t.Fatal(err)
@@ -121,6 +122,24 @@ func TestSettingsRoundTrip(t *testing.T) {
 	}
 	if got.Automatic() {
 		t.Error("automatic=false did not persist")
+	}
+	if got.Notify() {
+		t.Error("notify=false did not persist")
+	}
+}
+
+func TestNotifyDefaultsOn(t *testing.T) {
+	cfg := &Config{}
+	if !cfg.Notify() {
+		t.Error("notify should default to true when unset")
+	}
+	cfg.SetNotify(false)
+	if cfg.Notify() {
+		t.Error("notify should honor explicit false")
+	}
+	cfg.SetNotify(true)
+	if !cfg.Notify() {
+		t.Error("notify should honor explicit true")
 	}
 }
 
