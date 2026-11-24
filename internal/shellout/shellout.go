@@ -202,6 +202,21 @@ __mask_hook() {
     MASK_LAST_PWD="$PWD"
     eval "$(command mask --shell=` + shell + ` _hook)"
 }
+__mask_install_hook() {
+    local _mask_cmd
+    if [[ "$(declare -p PROMPT_COMMAND 2>/dev/null)" == "declare -a"* ]]; then
+        for _mask_cmd in "${PROMPT_COMMAND[@]}"; do
+            [ "$_mask_cmd" = "__mask_hook" ] && return
+        done
+        PROMPT_COMMAND+=(__mask_hook)
+        return
+    fi
+    case "${PROMPT_COMMAND:-}" in
+        *__mask_hook*) ;;
+        *) PROMPT_COMMAND="__mask_hook${PROMPT_COMMAND:+; $PROMPT_COMMAND}" ;;
+    esac
+}
+__mask_install_hook
 __mask_hook
 `
 }

@@ -164,6 +164,9 @@ func TestInitInstallsDirectoryHook(t *testing.T) {
 	if !strings.Contains(bashOut, "MASK_LAST_PWD") || !strings.Contains(bashOut, "command mask --shell=bash _hook") {
 		t.Errorf("bash init missing guarded hook:\n%s", bashOut)
 	}
+	if !strings.Contains(bashOut, "__mask_install_hook") || !strings.Contains(bashOut, "PROMPT_COMMAND") {
+		t.Errorf("bash init must register the hook with PROMPT_COMMAND:\n%s", bashOut)
+	}
 
 	zshOut, _ := Init(Zsh)
 	if !strings.Contains(zshOut, "add-zsh-hook chpwd __mask_hook") {
