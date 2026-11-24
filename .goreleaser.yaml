@@ -16,7 +16,8 @@ builds:
       - -trimpath
     ldflags:
       - -s -w
-      - -X github.com/metruzanca/mask/internal/cmd.Version={{.Version}}
+      - -X github.com/metruzanca/mask/internal/cmd.Version={{.Tag}}
+      - -X github.com/metruzanca/mask/internal/cmd.Commit={{.ShortCommit}}
     goos:
       - linux
       - darwin

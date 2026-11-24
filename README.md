@@ -128,6 +128,7 @@ mask settings        # automatic vs manual control
 mask settings off    # same, without the form
 mask config          # show all settings
 mask config setting.notify false   # silence change notices (creates config if missing)
+mask version         # print the version
 ```
 
 ### Switching
