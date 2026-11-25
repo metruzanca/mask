@@ -19,6 +19,8 @@ last wore there; leave and it takes the mask off.
 
 [Installation](#installation) • [Quick start](#quick-start) • [Automatic mode](#automatic-mode) • [Starship prompt](#starship-prompt) • [Configuration](#configuration) • [Troubleshooting](#troubleshooting)
 
+![Entering a repository puts on its mask, leaving takes it off](docs/gifs/auto-switch.gif)
+
 ## Features
 
 * **Per-repository memory.** A repo remembers the mask you last wore in it, and
@@ -99,6 +101,11 @@ $ mask list
   personal  Sam <sam@personal.example>
 ```
 
+The mask decides the identity git records, including for a commit that changes
+nothing:
+
+![Two repositories committing as two different people](docs/gifs/commit-identity.gif)
+
 ## How it works
 
 `mask` never edits `~/.gitconfig`. When a mask is applied, the shell wrapper
@@ -109,6 +116,11 @@ sources the output of `mask switch`, which exports:
 * `GIT_SSH_COMMAND` (the mask's SSH key, with `IdentitiesOnly=yes`)
 * `GIT_CONFIG_*` entries for `user.name`, `user.email`, and `core.sshCommand`
 * `MASK_NAME`, plus any environment variables defined on the mask
+
+`git push` therefore uses the key belonging to the mask, not whichever key
+happens to come first in your agent:
+
+![Switching repositories changes the SSH key git uses](docs/gifs/ssh-key.gif)
 
 Because these are environment variables, they apply to the current shell and
 everything it starts. A new shell starts clean and syncs itself when the
@@ -139,6 +151,8 @@ mask version         # print the version
 * `mask switch <name>` inside a repository is remembered for that repository
   when automatic mode is on.
 * A successful switch prints a one-line confirmation naming the mask.
+
+![Toggling between two masks and checking what is worn](docs/gifs/manual-switch.gif)
 
 ### Turning a mask off, and back on
 
@@ -246,6 +260,11 @@ file to add environment variables or fine-tune settings.
 automatic = true
 notify    = true
 ```
+
+Environment variables in a mask's `env` table are exported with the mask and
+removed when it goes off:
+
+![Per-mask environment variables changing with the directory](docs/gifs/env-vars.gif)
 
 Both settings can also be changed from the CLI with `mask config`, which
 creates the config file when it is missing:
@@ -381,6 +400,9 @@ go test ./...
 # Install the working copy
 go install .
 ```
+
+The README GIFs are recorded from VHS tapes in `docs/vhs`; see
+[docs/vhs/README.md](docs/vhs/README.md) to regenerate them.
 
 Releases are built by GoReleaser for Linux, macOS, and Windows on `amd64` and
 `arm64`. Tag a commit with `vMAJOR.MINOR.PATCH` to publish one.
